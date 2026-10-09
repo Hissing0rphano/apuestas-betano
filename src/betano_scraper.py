@@ -228,4 +228,25 @@ class BetanoChileScraper:
                         except Exception:
                             pass
 
+        if results:
+            return pd.DataFrame(results)
+
+        # Fallback de Respaldo: Leer live_betano_cache.json si el servidor de la nube (Streamlit Cloud) es bloqueado por Betano
+        try:
+            import os
+            cache_file = os.path.join(os.path.dirname(__file__), '..', 'data', 'live_betano_cache.json')
+            if os.path.exists(cache_file):
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                    matches = cache_data.get(comp_key, [])
+                    if not matches and comp_key == 'POPULARES':
+                        matches = []
+                        for k, v in cache_data.items():
+                            matches.extend(v[:4])
+                    if matches:
+                        return pd.DataFrame(matches[:max_matches])
+        except Exception:
+            pass
+
         return pd.DataFrame(results)
+
