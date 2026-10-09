@@ -216,6 +216,10 @@ def build_highlighted_table(matches_df, highlight_enabled=True):
 
     return pd.DataFrame(table_rows), all_picks
 
+@st.cache_data(ttl=90, show_spinner=False)
+def get_cached_matches(comp_key='POPULARES', max_matches=20):
+    return scraper.get_matches_by_competition(comp_key, max_matches=max_matches)
+
 # =========================================================
 # TAB 1: PARTIDOS POPULARES & TOP RECOMENDACIONES (PORTADA)
 # =========================================================
@@ -227,11 +231,11 @@ with tab_populares:
     with col_btn:
         scan_pop_button = st.button("🔄 Escanear Partidos Populares en Vivo", type="primary", use_container_width=True)
 
-    if 'pop_matches_df' not in st.session_state or scan_pop_button:
-        with st.spinner("Escaneando partidos populares de Betano Chile y calculando pronósticos IA..."):
-            st.session_state.pop_matches_df = scraper.get_matches_by_competition('POPULARES', max_matches=20)
+    if scan_pop_button:
+        get_cached_matches.clear()
 
-    pop_df = st.session_state.get('pop_matches_df', pd.DataFrame())
+    with st.spinner("Escaneando partidos populares de Betano Chile y calculando pronósticos IA..."):
+        pop_df = get_cached_matches('POPULARES', max_matches=20)
 
     if not pop_df.empty:
         st.markdown("---")
@@ -278,7 +282,7 @@ with tab_populares:
         else:
             st.info("No se pudieron generar pronósticos para los partidos actuales.")
     else:
-        st.warning("No se pudieron cargar partidos desde Betano. Presiona el botón para escanear.")
+        st.warning("⚠️ No se pudieron obtener partidos en vivo en este momento desde Betano. Intenta nuevamente presionando el botón.")
 
 # =========================================================
 # TAB 2: EXPLORAR POR LIGAS & CAMPEONATOS
@@ -298,11 +302,11 @@ with tab_ligas:
     with col_lbtn:
         scan_league_btn = st.button(f"🔄 Consultar {COMPETITIONS_MAP[selected_comp_key]} en Vivo", type="primary", use_container_width=True)
 
-    if f"league_matches_{selected_comp_key}" not in st.session_state or scan_league_btn:
-        with st.spinner(f"Consultando {COMPETITIONS_MAP[selected_comp_key]} en Betano Chile y calculando pronósticos..."):
-            st.session_state[f"league_matches_{selected_comp_key}"] = scraper.get_matches_by_competition(selected_comp_key, max_matches=25)
+    if scan_league_btn:
+        get_cached_matches.clear()
 
-    league_matches_df = st.session_state.get(f"league_matches_{selected_comp_key}", pd.DataFrame())
+    with st.spinner(f"Consultando {COMPETITIONS_MAP[selected_comp_key]} en Betano Chile y calculando pronósticos..."):
+        league_matches_df = get_cached_matches(selected_comp_key, max_matches=25)
 
     if not league_matches_df.empty:
         st.markdown("---")
