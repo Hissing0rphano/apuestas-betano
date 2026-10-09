@@ -227,59 +227,58 @@ with tab_populares:
     with col_btn:
         scan_pop_button = st.button("🔄 Escanear Partidos Populares en Vivo", type="primary", use_container_width=True)
 
-    if scan_pop_button or 'pop_matches_df' in st.session_state:
-        if scan_pop_button:
-            with st.spinner("Escaneando partidos populares de Betano Chile y calculando pronósticos IA..."):
-                st.session_state.pop_matches_df = scraper.get_matches_by_competition('POPULARES', max_matches=20)
+    if 'pop_matches_df' not in st.session_state or scan_pop_button:
+        with st.spinner("Escaneando partidos populares de Betano Chile y calculando pronósticos IA..."):
+            st.session_state.pop_matches_df = scraper.get_matches_by_competition('POPULARES', max_matches=20)
 
-        pop_df = st.session_state.get('pop_matches_df', pd.DataFrame())
+    pop_df = st.session_state.get('pop_matches_df', pd.DataFrame())
 
-        if not pop_df.empty:
-            st.markdown("---")
-            
-            # INTERRUPTOR INTELIGENTE IA
-            highlight_pop = st.toggle("🟢 Modo Inteligente IA: Resaltar Semáforo de Cuotas en la Tabla", value=True, key="toggle_pop")
+    if not pop_df.empty:
+        st.markdown("---")
+        
+        # INTERRUPTOR INTELIGENTE IA
+        highlight_pop = st.toggle("🟢 Modo Inteligente IA: Resaltar Semáforo de Cuotas en la Tabla", value=True, key="toggle_pop")
 
-            st.markdown("<div class='legend-bar'>🚦 <b>Semáforo de Probabilidades:</b> 🟩 ≥70% (Muy Segura) | 🟨 55-69% (Segura) | 🟥 40-54% (Ajustada) | ⚠️ &lt;40% (Alto Riesgo)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='legend-bar'>🚦 <b>Semáforo de Probabilidades:</b> 🟩 ≥70% (Muy Segura) | 🟨 55-69% (Segura) | 🟥 40-54% (Ajustada) | ⚠️ &lt;40% (Alto Riesgo)</div>", unsafe_allow_html=True)
 
-            table_pop_df, all_picks = build_highlighted_table(pop_df, highlight_enabled=highlight_pop)
-            
-            st.success(f"Se encontraron {len(table_pop_df)} partidos en Betano Chile (Horario oficial de Chile).")
-            # Mostrar tabla sin índice numérico 0, 1, 2...
-            st.dataframe(table_pop_df, use_container_width=True, hide_index=True)
+        table_pop_df, all_picks = build_highlighted_table(pop_df, highlight_enabled=highlight_pop)
+        
+        st.success(f"Se encontraron {len(table_pop_df)} partidos en Betano Chile (Horario oficial de Chile).")
+        # Mostrar tabla sin índice numérico 0, 1, 2...
+        st.dataframe(table_pop_df, use_container_width=True, hide_index=True)
 
-            st.markdown("---")
-            st.markdown("### 🌟 Top 5 Mejores Pronósticos Seleccionados por la IA")
+        st.markdown("---")
+        st.markdown("### 🌟 Top 5 Mejores Pronósticos Seleccionados por la IA")
 
-            if all_picks:
-                sorted_picks = sorted(all_picks, key=lambda x: x['pick_prob_%'], reverse=True)
+        if all_picks:
+            sorted_picks = sorted(all_picks, key=lambda x: x['pick_prob_%'], reverse=True)
 
-                for idx, pick in enumerate(sorted_picks[:5]):
-                    st.markdown(f"""
-                    <div class='{pick['badge_class']}'>
-                        <div class='card-title'>{pick['confianza']}: {pick['partido']}</div>
-                        <div class='card-text'>👉 <b>Elección Recomendada:</b> {pick['pick_label']} | <b>Cuota Betano:</b> {pick['pick_odds']} | <b>Cuota Justa IA:</b> {pick['fair_odd']}</div>
-                        <div class='card-text'>📊 <b>Probabilidad Estimada por la IA:</b> {pick['pick_prob_%']}%</div>
-                        <div class='card-ev'>🔥 Ventaja Matemática (EV): +{pick['pick_ev_%']}%</div>
-                        <div class='card-text'>💡 <b>Justificación:</b> {pick['justificacion']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+            for idx, pick in enumerate(sorted_picks[:5]):
+                st.markdown(f"""
+                <div class='{pick['badge_class']}'>
+                    <div class='card-title'>{pick['confianza']}: {pick['partido']}</div>
+                    <div class='card-text'>👉 <b>Elección Recomendada:</b> {pick['pick_label']} | <b>Cuota Betano:</b> {pick['pick_odds']} | <b>Cuota Justa IA:</b> {pick['fair_odd']}</div>
+                    <div class='card-text'>📊 <b>Probabilidad Estimada por la IA:</b> {pick['pick_prob_%']}%</div>
+                    <div class='card-ev'>🔥 Ventaja Matemática (EV): +{pick['pick_ev_%']}%</div>
+                    <div class='card-text'>💡 <b>Justificación:</b> {pick['justificacion']}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    if st.button(f"⚡ Aceptar Pronóstico en 1-Clic para {active_user} (Pronóstico #{idx+1})", key=f"btn_pop_{idx}"):
-                        tracker.register_bet(
-                            username=active_user,
-                            match_name=pick['partido'],
-                            league=pick['liga'],
-                            market=pick['pick_label'],
-                            odds=pick['pick_odds'],
-                            stake=10.0,
-                            ev_pct=pick['pick_ev_%']
-                        )
-                        st.success(f"¡Pronóstico registrado exitosamente para {active_user}!")
-            else:
-                st.info("No se pudieron generar pronósticos para los partidos actuales.")
+                if st.button(f"⚡ Aceptar Pronóstico en 1-Clic para {active_user} (Pronóstico #{idx+1})", key=f"btn_pop_{idx}"):
+                    tracker.register_bet(
+                        username=active_user,
+                        match_name=pick['partido'],
+                        league=pick['liga'],
+                        market=pick['pick_label'],
+                        odds=pick['pick_odds'],
+                        stake=10.0,
+                        ev_pct=pick['pick_ev_%']
+                    )
+                    st.success(f"¡Pronóstico registrado exitosamente para {active_user}!")
         else:
-            st.warning("No se pudieron cargar partidos desde Betano. Presiona el botón para escanear.")
+            st.info("No se pudieron generar pronósticos para los partidos actuales.")
+    else:
+        st.warning("No se pudieron cargar partidos desde Betano. Presiona el botón para escanear.")
 
 # =========================================================
 # TAB 2: EXPLORAR POR LIGAS & CAMPEONATOS
@@ -299,56 +298,55 @@ with tab_ligas:
     with col_lbtn:
         scan_league_btn = st.button(f"🔄 Consultar {COMPETITIONS_MAP[selected_comp_key]} en Vivo", type="primary", use_container_width=True)
 
-    if scan_league_btn or f"league_matches_{selected_comp_key}" in st.session_state:
-        if scan_league_btn:
-            with st.spinner(f"Consultando {COMPETITIONS_MAP[selected_comp_key]} en Betano Chile y calculando pronósticos..."):
-                st.session_state[f"league_matches_{selected_comp_key}"] = scraper.get_matches_by_competition(selected_comp_key, max_matches=25)
+    if f"league_matches_{selected_comp_key}" not in st.session_state or scan_league_btn:
+        with st.spinner(f"Consultando {COMPETITIONS_MAP[selected_comp_key]} en Betano Chile y calculando pronósticos..."):
+            st.session_state[f"league_matches_{selected_comp_key}"] = scraper.get_matches_by_competition(selected_comp_key, max_matches=25)
 
-        league_matches_df = st.session_state.get(f"league_matches_{selected_comp_key}", pd.DataFrame())
+    league_matches_df = st.session_state.get(f"league_matches_{selected_comp_key}", pd.DataFrame())
 
-        if not league_matches_df.empty:
-            st.markdown("---")
-            
-            # INTERRUPTOR INTELIGENTE IA
-            highlight_league = st.toggle("🟢 Modo Inteligente IA: Resaltar Semáforo de Cuotas en la Tabla", value=True, key=f"toggle_lg_{selected_comp_key}")
+    if not league_matches_df.empty:
+        st.markdown("---")
+        
+        # INTERRUPTOR INTELIGENTE IA
+        highlight_league = st.toggle("🟢 Modo Inteligente IA: Resaltar Semáforo de Cuotas en la Tabla", value=True, key=f"toggle_lg_{selected_comp_key}")
 
-            st.markdown("<div class='legend-bar'>🚦 <b>Semáforo de Probabilidades:</b> 🟩 ≥70% (Muy Segura) | 🟨 55-69% (Segura) | 🟥 40-54% (Ajustada) | ⚠️ &lt;40% (Alto Riesgo)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='legend-bar'>🚦 <b>Semáforo de Probabilidades:</b> 🟩 ≥70% (Muy Segura) | 🟨 55-69% (Segura) | 🟥 40-54% (Ajustada) | ⚠️ &lt;40% (Alto Riesgo)</div>", unsafe_allow_html=True)
 
-            table_league_df, league_picks = build_highlighted_table(league_matches_df, highlight_enabled=highlight_league)
+        table_league_df, league_picks = build_highlighted_table(league_matches_df, highlight_enabled=highlight_league)
 
-            st.success(f"Se encontraron {len(table_league_df)} partidos en {COMPETITIONS_MAP[selected_comp_key]} (Horario oficial de Chile).")
-            # Mostrar tabla sin índice numérico 0, 1, 2...
-            st.dataframe(table_league_df, use_container_width=True, hide_index=True)
+        st.success(f"Se encontraron {len(table_league_df)} partidos en {COMPETITIONS_MAP[selected_comp_key]} (Horario oficial de Chile).")
+        # Mostrar tabla sin índice numérico 0, 1, 2...
+        st.dataframe(table_league_df, use_container_width=True, hide_index=True)
 
-            st.markdown(f"### 🌟 Top Pronósticos en {COMPETITIONS_MAP[selected_comp_key]}")
-            if league_picks:
-                sorted_lg_picks = sorted(league_picks, key=lambda x: x['pick_prob_%'], reverse=True)
-                for idx, pick in enumerate(sorted_lg_picks[:5]):
-                    st.markdown(f"""
-                    <div class='{pick['badge_class']}'>
-                        <div class='card-title'>{pick['confianza']}: {pick['partido']}</div>
-                        <div class='card-text'>👉 <b>Elección Recomendada:</b> {pick['pick_label']} | <b>Cuota Betano:</b> {pick['pick_odds']} | <b>Cuota Justa IA:</b> {pick['fair_odd']}</div>
-                        <div class='card-text'>📊 <b>Probabilidad Estimada por la IA:</b> {pick['pick_prob_%']}%</div>
-                        <div class='card-ev'>🔥 Ventaja Matemática (EV): +{pick['pick_ev_%']}%</div>
-                        <div class='card-text'>💡 <b>Justificación:</b> {pick['justificacion']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+        st.markdown(f"### 🌟 Top Pronósticos en {COMPETITIONS_MAP[selected_comp_key]}")
+        if league_picks:
+            sorted_lg_picks = sorted(league_picks, key=lambda x: x['pick_prob_%'], reverse=True)
+            for idx, pick in enumerate(sorted_lg_picks[:5]):
+                st.markdown(f"""
+                <div class='{pick['badge_class']}'>
+                    <div class='card-title'>{pick['confianza']}: {pick['partido']}</div>
+                    <div class='card-text'>👉 <b>Elección Recomendada:</b> {pick['pick_label']} | <b>Cuota Betano:</b> {pick['pick_odds']} | <b>Cuota Justa IA:</b> {pick['fair_odd']}</div>
+                    <div class='card-text'>📊 <b>Probabilidad Estimada por la IA:</b> {pick['pick_prob_%']}%</div>
+                    <div class='card-ev'>🔥 Ventaja Matemática (EV): +{pick['pick_ev_%']}%</div>
+                    <div class='card-text'>💡 <b>Justificación:</b> {pick['justificacion']}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    if st.button(f"⚡ Aceptar Pronóstico de {selected_comp_key} para {active_user} (#{idx+1})", key=f"btn_lg_{selected_comp_key}_{idx}"):
-                        tracker.register_bet(
-                            username=active_user,
-                            match_name=pick['partido'],
-                            league=pick['liga'],
-                            market=pick['pick_label'],
-                            odds=pick['pick_odds'],
-                            stake=10.0,
-                            ev_pct=pick['pick_ev_%']
-                        )
-                        st.success(f"¡Pronóstico registrado para {active_user}!")
-            else:
-                st.info("No se pudieron generar pronósticos en esta liga.")
+                if st.button(f"⚡ Aceptar Pronóstico de {selected_comp_key} para {active_user} (#{idx+1})", key=f"btn_lg_{selected_comp_key}_{idx}"):
+                    tracker.register_bet(
+                        username=active_user,
+                        match_name=pick['partido'],
+                        league=pick['liga'],
+                        market=pick['pick_label'],
+                        odds=pick['pick_odds'],
+                        stake=10.0,
+                        ev_pct=pick['pick_ev_%']
+                    )
+                    st.success(f"¡Pronóstico registrado para {active_user}!")
         else:
-            st.info(f"ℹ️ No hay partidos programados para {COMPETITIONS_MAP[selected_comp_key]} en este momento en Betano Chile.")
+            st.info("No se pudieron generar pronósticos en esta liga.")
+    else:
+        st.info(f"ℹ️ No hay partidos programados para {COMPETITIONS_MAP[selected_comp_key]} en este momento en Betano Chile.")
 
 # =========================================================
 # TAB 3: DUELO DE AMIGOS & TRACKER MULTI-USUARIO
