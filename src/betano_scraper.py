@@ -4,6 +4,7 @@ import re
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 import zoneinfo
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 COMPETITIONS_MAP = {
     'POPULARES': '🔥 Todos los Partidos Populares del Día',
@@ -22,31 +23,40 @@ COMPETITIONS_MAP = {
     'SELECCIONES': '🌍 Partidos de Selecciones (Internacionales)'
 }
 
-COMPETITION_DIRECT_URLS = {
-    'INGLATERRA': 'https://www.betanosports.com/api/sport/futbol/inglaterra/premier-league/1r/',
-    'ALEMANIA': 'https://www.betanosports.com/api/sport/futbol/alemania/bundesliga/216r/',
-    'ITALIA': 'https://www.betanosports.com/api/sport/futbol/italia/serie-a/1635r/',
-    'FRANCIA': 'https://www.betanosports.com/api/sport/futbol/francia/ligue-1/215r/',
-    'ESPANA': 'https://www.betanosports.com/api/sport/futbol/espana/laliga/10008r/',
-    'BRASIL': 'https://www.betanosports.com/api/sport/futbol/brasil/brasileirao-serie-a/10016r/',
-    'CHILE': 'https://www.betanosports.com/api/sport/futbol/chile/primera-division/10014r/',
-    'ARGENTINA': 'https://www.betanosports.com/api/sport/futbol/argentina/liga-profesional/10011r/',
-    'CHAMPIONS': 'https://www.betanosports.com/api/sport/futbol/internacional/uefa-champions-league/10005r/',
-    'EUROPA_LEAGUE': 'https://www.betanosports.com/api/sport/futbol/internacional/uefa-europa-league/10006r/',
-    'LIBERTADORES': 'https://www.betanosports.com/api/sport/futbol/sudamerica/copa-libertadores/10023r/',
-    'SUDAMERICANA': 'https://www.betanosports.com/api/sport/futbol/sudamerica/copa-sudamericana/10024r/',
-    'SELECCIONES': 'https://www.betanosports.com/api/sport/futbol/internacional/eliminatorias-conmebol/10050r/'
+COMPETITION_DIRECT_PATHS = {
+    'INGLATERRA': '/api/sport/futbol/inglaterra/premier-league/1r/',
+    'ALEMANIA': '/api/sport/futbol/alemania/bundesliga/216r/',
+    'ITALIA': '/api/sport/futbol/italia/serie-a/1635r/',
+    'FRANCIA': '/api/sport/futbol/francia/ligue-1/215r/',
+    'ESPANA': '/api/sport/futbol/espana/laliga/10008r/',
+    'BRASIL': '/api/sport/futbol/brasil/brasileirao-serie-a/10016r/',
+    'CHILE': '/api/sport/futbol/chile/primera-division/10014r/',
+    'ARGENTINA': '/api/sport/futbol/argentina/liga-profesional/10011r/',
+    'CHAMPIONS': '/api/sport/futbol/internacional/uefa-champions-league/10005r/',
+    'EUROPA_LEAGUE': '/api/sport/futbol/internacional/uefa-europa-league/10006r/',
+    'LIBERTADORES': '/api/sport/futbol/sudamerica/copa-libertadores/10023r/',
+    'SUDAMERICANA': '/api/sport/futbol/sudamerica/copa-sudamericana/10024r/',
+    'SELECCIONES': '/api/sport/futbol/internacional/eliminatorias-conmebol/10050r/'
 }
+
+MIRROR_DOMAINS = [
+    "https://www.betanosports.com",
+    "https://www.betano.com",
+    "https://br.betano.com"
+]
 
 class BetanoChileScraper:
     def __init__(self):
         self.base_url = "https://www.betanosports.com"
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'es-CL,es;q=0.9,en;q=0.8',
-            'Referer': 'https://www.betanosports.com/'
-        }
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        })
 
     def _format_chile_time(self, start_time_ms):
         """Convierte timestamp de milisegundos a Fecha y Hora oficial de Chile."""
@@ -63,27 +73,29 @@ class BetanoChileScraper:
         except Exception:
             return "Pronto"
 
+    def _safe_get(self, path):
+        for domain in MIRROR_DOMAINS:
+            url = f"{domain}{path}"
+            try:
+                res = self.session.get(url, timeout=4)
+                if res.status_code == 200:
+                    return res.json()
+            except Exception:
+                continue
+        return None
+
     def fetch_top_events(self):
-        url = f"{self.base_url}/api/home/top-events-v2/"
-        try:
-            res = requests.get(url, headers=self.headers, timeout=10)
-            if res.status_code == 200:
-                data = res.json()
-                return data.get('data', {}).get('topEventsV2', {}).get('events', {})
-            return {}
-        except Exception:
-            return {}
+        data = self._safe_get("/api/home/top-events-v2/")
+        if data:
+            return data.get('data', {}).get('topEventsV2', {}).get('events', {})
+        return {}
 
     def fetch_event_detail(self, event_url, event_id):
         clean_url = event_url.strip('/')
-        api_url = f"{self.base_url}/api/{clean_url}/"
-        try:
-            res = requests.get(api_url, headers=self.headers, timeout=10)
-            if res.status_code == 200:
-                return res.json().get('data', {}).get('event', {})
-            return {}
-        except Exception:
-            return {}
+        data = self._safe_get(f"/api/{clean_url}/")
+        if data:
+            return data.get('data', {}).get('event', {})
+        return {}
 
     def parse_match_1x2(self, event_data):
         if not event_data:
@@ -116,7 +128,7 @@ class BetanoChileScraper:
 
             if 'resultado del partido' in m_name or m_name == 'resultado final' or m_name == '1x2' or m_name == 'resultado':
                 for s in selections:
-                    s_name = s.get('name', '').upper()
+                    s_name = str(s.get('name', '')).strip().upper()
                     price = s.get('price')
                     if price:
                         if s_name == '1' and not odds_1: odds_1 = float(price)
@@ -141,26 +153,33 @@ class BetanoChileScraper:
     def get_matches_by_competition(self, comp_key='POPULARES', max_matches=25):
         results = []
 
-        # Caso A: Partidos Populares del Día (Top Events)
+        # Caso A: Partidos Populares del Día (Top Events en Paralelo Ultra Rápido)
         if comp_key == 'POPULARES':
             events = self.fetch_top_events()
-            for ev_id, ev_info in list(events.items())[:max_matches]:
-                url = ev_info.get('url')
-                if url:
-                    detail = self.fetch_event_detail(url, ev_id)
-                    parsed = self.parse_match_1x2(detail)
-                    if parsed:
-                        results.append(parsed)
-            return pd.DataFrame(results)
+            ev_list = [(ev_id, ev_info) for ev_id, ev_info in list(events.items())[:max_matches] if ev_info.get('url')]
+
+            # Usar ThreadPoolExecutor para descargar en paralelo en 1 segundo
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                future_to_ev = {executor.submit(self.fetch_event_detail, ev_info['url'], ev_id): ev_id for ev_id, ev_info in ev_list}
+                for future in as_completed(future_to_ev):
+                    try:
+                        detail = future.result()
+                        parsed = self.parse_match_1x2(detail)
+                        if parsed:
+                            results.append(parsed)
+                    except Exception:
+                        pass
+
+            if results:
+                return pd.DataFrame(results)
 
         # Caso B: Liga / Campeonato Específico
-        direct_url = COMPETITION_DIRECT_URLS.get(comp_key)
-        if direct_url:
+        direct_path = COMPETITION_DIRECT_PATHS.get(comp_key)
+        if direct_path:
             try:
-                res = requests.get(direct_url, headers=self.headers, timeout=8)
-                if res.status_code == 200:
-                    data = res.json().get('data', {})
-                    blocks = data.get('blocks', [])
+                data = self._safe_get(direct_path)
+                if data:
+                    blocks = data.get('data', {}).get('blocks', [])
                     events = blocks[0].get('events', []) if blocks else []
                     league_title = COMPETITIONS_MAP.get(comp_key, 'Liga')
 
@@ -191,14 +210,22 @@ class BetanoChileScraper:
             target_kws = keywords.get(comp_key, [])
             events = self.fetch_top_events()
 
+            ev_list = []
             for ev_id, ev_info in events.items():
                 ev_str = f"{ev_info.get('url', '')} {ev_info.get('regionName', '')} {ev_info.get('leagueDescription', '')}".lower()
-                if any(kw in ev_str for kw in target_kws):
-                    url = ev_info.get('url')
-                    if url:
-                        detail = self.fetch_event_detail(url, ev_id)
-                        parsed = self.parse_match_1x2(detail)
-                        if parsed:
-                            results.append(parsed)
+                if any(kw in ev_str for kw in target_kws) and ev_info.get('url'):
+                    ev_list.append((ev_id, ev_info))
+
+            if ev_list:
+                with ThreadPoolExecutor(max_workers=8) as executor:
+                    future_to_ev = {executor.submit(self.fetch_event_detail, ev_info['url'], ev_id): ev_id for ev_id, ev_info in ev_list[:max_matches]}
+                    for future in as_completed(future_to_ev):
+                        try:
+                            detail = future.result()
+                            parsed = self.parse_match_1x2(detail)
+                            if parsed:
+                                results.append(parsed)
+                        except Exception:
+                            pass
 
         return pd.DataFrame(results)
